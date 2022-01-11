@@ -1,8 +1,9 @@
 # Smallweb development showcase
 
-**smallweb** is a small rust based web framework that i am building to learn Rust. 
+**smallweb** is a minimal Rust based web framework that I am implementing to learn Rust. 
 
-It implements a subset of HTTP 1.1 and is fairly easy setup. 
+It implements a subset of HTTP 1.1 and is fairly to easy setup.
+It is just dependant on following crates: regex, urlencoding and threadpool.
 
 ```rust
 fn main(){
@@ -20,8 +21,7 @@ fn main(){
 }
 fn hello(r:Request)->HTTP_RESPONSE{
     _OK((format!(
-"<h1> Hi {}</h1><p> My name is jan</p><details>
-", r.url_params.get("name").unwrap())))
+"<h1> Hi {}</h1><p> My name is jan</p>", r.url_params.get("name").unwrap())))
 }
 ```
 Documentation will follow as soon as I am happy with the current status.
