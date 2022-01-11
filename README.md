@@ -10,7 +10,7 @@ fn main(){
 	serve("127.0.0.1:7000",
           Router::new().get("/h",|r:Request|_OK("Hello".to_string()))
               .validator(|r:Request|Some(r))
-              .default(_OK("NOT FOUND".to_string()))
+              .default(_REDIRECT("http://www.rust-lang.org".to_string()))
               //here hello is a function with type fn(Request)->HTTP_RESPONSE
               .get("/:name",hello)
               .get("/",|a:Request| _OK("<h1>HELLOW</h1>".to_string()))
