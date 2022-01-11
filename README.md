@@ -18,11 +18,14 @@ fn main(){
     );
 
 }
-
-fn hello2(r:Request)->HTTP_RESPONSE{
-    _OK( "smallweb!".to_owned())
+fn hello(r:Request)->HTTP_RESPONSE{
+    _OK((format!(
+"<h1>{}</h1><p> My name is jan</p><details>
+<summary>These are details</summary>
+<p>Im A detail</p>
+</details>
+", r.url_params.get("name").unwrap())))
 }
-
 ```
 Documentation will follow as soon as I am happy with the current status.
 

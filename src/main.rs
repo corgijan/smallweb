@@ -5,10 +5,10 @@ use std::thread;
 
 fn main(){
     serve("127.0.0.1:7000",
-          Router::new().get("/h",|r:Request|_OK("Hello".to_string()))
+          Router::new().get("/hello",|r:Request|_OK("Hello".to_string()))
               .validator(|r:Request|Some(r))
               .default(_OK("NOT FOUND".to_string()))
-              .get("/:name",hello)
+              .get("/:name",helloName)
               .get("/",|a:Request| _OK("<h1>HELLOW</h1>".to_string()))
               .thradpool_size(16)
     );
@@ -24,7 +24,7 @@ fn hello(r:Request)->HTTP_RESPONSE{
 }
 
 
-fn hello2(r:Request)->HTTP_RESPONSE{
+fn helloName(r:Request)->HTTP_RESPONSE{
     _OK( "smallweb!".to_owned())
 }
 
