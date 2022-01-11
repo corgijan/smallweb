@@ -20,10 +20,7 @@ fn main(){
 }
 fn hello(r:Request)->HTTP_RESPONSE{
     _OK((format!(
-"<h1>{}</h1><p> My name is jan</p><details>
-<summary>These are details</summary>
-<p>Im A detail</p>
-</details>
+"<h1> Hi {}</h1><p> My name is jan</p><details>
 ", r.url_params.get("name").unwrap())))
 }
 ```
