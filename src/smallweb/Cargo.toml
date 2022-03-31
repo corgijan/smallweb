@@ -8,4 +8,5 @@ edition = "2021"
 [dependencies]
 regex = "1"
 urlencoding = "2.1.0"
-threadpool = "1.8.1"
+async-std = {version = "1.11.0", features = ["attributes"]}
+futures = "0.3"

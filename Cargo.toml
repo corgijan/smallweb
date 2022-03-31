@@ -7,5 +7,6 @@ edition = "2021"
 
 [dependencies]
 smallweb = { path = "./src/smallweb" }
+async-std = {version = "1.11.0", features = ["attributes"]}
 
 
