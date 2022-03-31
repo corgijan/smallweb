@@ -5,27 +5,23 @@ use std::thread;
 
 fn main(){
     serve("127.0.0.1:7000",
-          Router::new().get("/hello",|r:Request|_OK("Hello".to_string()))
-              .validator(|r:Request|Some(r))
-              .default(_OK("NOT FOUND".to_string()))
-              .get("/:name",helloName)
-              .get("/",|a:Request| _OK("<h1>HELLOW</h1>".to_string()))
-              .thradpool_size(16)
+          Router::new()
+              .get("/hello",|r:Request|_OK("Hello".to_string()))
+              //.validator(|r:Request| Some(r))
+              //.default(_OK("NOT FOUND".to_string()))
+              .get("/saymyname", hello_params) // responds to /saymyname&name=jan
+              .get("/:name", hello_url_param)
+              .get("/",|r:Request| _OK("<h1>HELLO from the BASE</h1>".to_string()))
+              //.thradpool_size(16)
     );
 }
 
-fn hello(r:Request)->HTTP_RESPONSE{
-    _OK((format!(
-"<h1>{}</h1><p> My name is jan</p><details>
-<summary>These are details</summary>
-<p>Im A detail</p>
-</details>
-", r.url_params.get("name").unwrap())))
+fn hello_params(r:Request) -> HTTP_RESPONSE{
+    _OK((format!("Hello {} </h1> by request param</p>", r.params.get("name").unwrap())))
 }
 
-
-fn helloName(r:Request)->HTTP_RESPONSE{
-    _OK( "smallweb!".to_owned())
+fn hello_url_param(r:Request) -> HTTP_RESPONSE {
+    _OK( format!("Hello {} by url", r.url_params.get("name").unwrap()))
 }
 
 

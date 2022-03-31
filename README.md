@@ -7,28 +7,26 @@ It is dependent on following crates: regex, urlencoding and threadpool.
 
 ```rust
 fn main(){
-	serve("127.0.0.1:7000",
-          Router::new().get("/h", |r:Request|_OK("Hello".to_string()))
-              .validator(|r:Request|Some(r))
-              .default(_REDIRECT("http://www.rust-lang.org".to_string()))
-	      
-              //here hello is a function with type fn(Request)->HTTP_RESPONSE
-              .get("/:name", hello)
-              .get("/", |a:Request| _OK("<h1>HELLOW</h1>".to_string()))
-	      //get will be reworked to use url-params as closure params
-	      
-	      //Threadpool size is the size of the threadpool that takes the requests 
-              .thradpool_size(16)
+    serve("127.0.0.1:7000",
+          Router::new()
+              .get("/",|r:Request|_OK("Hello".to_string()))
+              .get("/saymyname", hello_params) // responds to /saymyname&name=jan
+              .get("/:name", hello_url_param) // responds to /<name> except /saymyname
+              //.validator(|r:Request| Some(r))
+              //.default(_OK("NOT FOUND".to_string()))
+              //.thradpool_size(16)
     );
-
 }
 
-fn hello(r:Request)->HTTP_RESPONSE{
-    _OK((format!(
-    "<h1> Hi {}</h1><p> My name is jan</p>", r.url_params.get("name").unwrap())))
+fn hello_params(r:Request) -> HTTP_RESPONSE{
+    _OK((format!("Hello {} </h1> by request param</p>", r.params.get("name").unwrap())))
+}
+
+fn hello_url_param(r:Request) -> HTTP_RESPONSE {
+    _OK( format!("Hello {} by url", r.url_params.get("name").unwrap()))
 }
 ```
-Documentation will follow as soon as I am happy with the current status.
+Proper documentation will follow as soon as I am happy with the current status.
 
 ```
 
@@ -39,7 +37,7 @@ pub enum HTTP_RESPONSE{
     _REDIRECT(String),
     _UNAUTHORIZED,
     _NOT_FOUND,
-    _OK_with_header(String, HashMap<String,String>)
+    _OK_with_header(String, HashMap<String,String>) //subject to change
 }
 ```
 

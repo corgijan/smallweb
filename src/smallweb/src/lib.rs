@@ -235,7 +235,7 @@ pub fn serve(address:&str, router:& mut Router){
         let req = parse_req(&decoded.to_owned());
         let pool = ThreadPool::new(router.thradpool_size.into());
         pool.execute(move|| {
-            route(dbg!( req),Response::new(stream),&router);
+            route( req,Response::new(stream),&router);
         });
     }
 }
