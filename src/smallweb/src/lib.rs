@@ -8,6 +8,7 @@ use async_std::io;
 use async_std::net::TcpListener;
 use async_std::prelude::*;
 use futures::AsyncWriteExt;
+use lazy_static::lazy_static;
 
 type HTTPMETHOD = String;
 type Validator = fn(Request) -> Option<Request>;
@@ -220,13 +221,14 @@ fn header_to_string(header: HashMap<String, String>) -> String {
 
 use async_std::task::spawn;
 use futures::stream::StreamExt;
-
 pub async fn serve(address: &str, router: &'static Router) {
     let listener = TcpListener::bind(address).await.unwrap();
+
     listener
         .incoming()
         .for_each_concurrent(/* limit */ None, |tcpstream| async move {
             //let router=router.clone();
+            let start = std::time::Instant::now();
             let mut s = tcpstream.unwrap();
 
             let mut buffer = [0; 1024 * 16];
@@ -234,10 +236,14 @@ pub async fn serve(address: &str, router: &'static Router) {
             let decoded = decode_binary(&buffer[..am]).to_owned();
 
             let decoded = String::from_utf8_lossy(&decoded);
-
+            eprintln!("elapsed {:?} decode", start.elapsed().as_micros()); // note :?
+            let start2 = std::time::Instant::now();
             match parse_req(&decoded) {
                 Some(req) => {
+                    let start3 = std::time::Instant::now();
+                    eprintln!("elapsed {:?} parse req", start2.elapsed().as_micros());
                     route(req, Response::new(s), &router).await;
+                    eprintln!("elapsed {:?} sending", start3.elapsed().as_micros()); // note :?
                 }
                 _ => {
                     Response::new(s).send(HTTP_RESPONSE::_NOT_FOUND).await;
@@ -247,12 +253,17 @@ pub async fn serve(address: &str, router: &'static Router) {
         .await;
 }
 
+lazy_static! {
+    static ref REG_W : Regex  = Regex::new(r" /[\w|/]+").unwrap();
+    static ref REG_METHOD: Regex = Regex::new(r"(GET|POST|PUT|DELETE)").unwrap();
+    static ref REG_PARAM: Regex = Regex::new(r"(\?|&|\r\n)\w+=\w+").unwrap();
+    static ref REG_PARAM2: Regex = Regex::new(r"(\?|&|\r\n)\w+=\w+").unwrap();
+}
 fn parse_req(req_as_str: &str) -> Option<Request> {
     if &req_as_str == &"" { return None; }
-    let mut path_with_params: String = Regex::new(r" /[\w|/]+").unwrap().find_iter(req_as_str).map(|x| x.as_str().trim().replace("&", "")).collect();
-    let method = Regex::new(r"(GET|POST|PUT|DELETE)").unwrap().captures(req_as_str).unwrap().get(1).map_or("", |m| m.as_str()).to_owned();
-
-    let params: String = Regex::new(r"(\?|&|\r\n)\w+=\w+").unwrap().find_iter(req_as_str).map(|x| x.as_str().to_owned()).collect();
+    let mut path_with_params: String = REG_W.find_iter(req_as_str).map(|x| x.as_str().trim().replace("&", "")).collect();
+    let method = REG_METHOD.captures(req_as_str).unwrap().get(1).map_or("", |m| m.as_str()).to_owned();
+    let params: String = REG_PARAM.find_iter(req_as_str).map(|x| x.as_str().to_owned()).collect();
     if path_with_params == "" {
         path_with_params = "/".to_string()
     }
@@ -269,9 +280,7 @@ fn parse_req(req_as_str: &str) -> Option<Request> {
             _ => {}
         }
     }
-
-
-    let s: Vec<String> = Regex::new(r"\w+=\w+").unwrap().find_iter(&params).map(|x| x.as_str().replace("&", "").replace("?", "").replace("\r\n", "")).collect();
+    let s: Vec<String> = REG_PARAM2.find_iter(&params).map(|x| x.as_str().replace("&", "").replace("?", "").replace("\r\n", "")).collect();
     for cap in s {
         let splits: Vec<&str> = cap.split("=").collect();
         req.add_param(splits[0], splits[1]);

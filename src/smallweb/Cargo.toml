@@ -10,3 +10,5 @@ regex = "1"
 urlencoding = "2.1.0"
 async-std = {version = "1.11.0", features = ["attributes"]}
 futures = "0.3"
+elapsed = "0.1"
+lazy_static = "1.4.0"
