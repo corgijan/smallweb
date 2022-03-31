@@ -94,26 +94,26 @@ impl Router{
     /// }
     ///
     /// ```
-    pub fn get(&mut self,path:&str,f:fn(Request)->HTTP_RESPONSE)->&mut Router{
+    pub fn get(mut self,path:&str,f:fn(Request)->HTTP_RESPONSE)->Router{
         self.add_route(path,f,"GET".to_string());
         self
     }
 
-    pub fn post(&mut self,path:&str,f:fn(Request)->HTTP_RESPONSE)->&mut Router{
+    pub fn post(mut self,path:&str,f:fn(Request)->HTTP_RESPONSE)->Router{
         self.add_route(path,f,"POST".to_string());
         self
     }
 
-    pub fn put(&mut self,path:&str,f:fn(Request)->HTTP_RESPONSE)->&mut Router{
+    pub fn put(mut self,path:&str,f:fn(Request)->HTTP_RESPONSE)->Router{
         self.add_route(path,f,"PUT".to_string());
         self
     }
 
-    pub fn delete(&mut self,path:&str,f:fn(Request)->HTTP_RESPONSE)->&mut Router{
+    pub fn delete(mut self,path:&str,f:fn(Request)->HTTP_RESPONSE)->Router{
         self.add_route(path,f,"DELETE".to_string());
         self
     }
-    pub fn default(&mut self,default_resp:HTTP_RESPONSE)->&mut Router{
+    pub fn default(mut self,default_resp:HTTP_RESPONSE)->Router{
         self.default_response=default_resp;
         self
     }
@@ -130,14 +130,17 @@ impl Router{
             self.paths.insert((method,path.to_string()),f);
         }
     }
+    pub fn okay(self)->&'static mut Self{
+        return Box::leak(Box::new(self.clone()));
+    }
     fn validate(&self,r:Request)->Option<Request>{
         (self.validator)(r)
     }
-    pub  fn validator(&mut self,f:Validator)->&mut Router{
+    pub fn validator(mut self,f:Validator)->Router{
         self.validator=f;
         self
     }
-    pub fn thradpool_size(&mut self,size:u16)->&mut Router{
+    pub fn thradpool_size(mut self,size:u16)->Router{
         self.thradpool_size=size;
         self
     }
@@ -221,10 +224,11 @@ fn header_to_string(header:HashMap<String,String>)->String{
     acc
 }
 
-pub fn serve(address:&str, router:& mut Router){
+pub fn serve(address:&str, router:&'static Router){
     let listener = TcpListener::bind(address).unwrap();
+    let pool = ThreadPool::new(router.thradpool_size.into());
     for stream_in in listener.incoming() {
-        let router=router.clone();
+        //let router=router.clone();
         let mut stream = stream_in.unwrap();
         let mut buffer = [0; 1024*16];
         let am = stream.read(&mut buffer).unwrap();
@@ -232,17 +236,25 @@ pub fn serve(address:&str, router:& mut Router){
 
         let decoded = String::from_utf8_lossy(&decoded);
 
-        let req = parse_req(&decoded.to_owned());
-        let pool = ThreadPool::new(router.thradpool_size.into());
-        pool.execute(move|| {
-            route( req,Response::new(stream),&router);
-        });
+        match  parse_req(&decoded.to_owned()){
+            Some(req)=>{
+                pool.execute(move|| {
+                    route( req,Response::new(stream),&router);
+                });
+            }
+            _=>{ pool.execute(move|| {
+              Response::new(stream).send(HTTP_RESPONSE::_NOT_FOUND)
+            });}
+        }
+
+
     }
 }
 
- fn parse_req(req_as_str:&str)->Request{
-    let mut path_with_params: String = Regex::new(r" /[\w|/]+").unwrap().find_iter(req_as_str).map(|x| x.as_str().trim().replace("&", "")).collect();
-    let method= Regex::new(r"([A-Z]+)").unwrap().captures(req_as_str).unwrap().get(1).map_or("",|m|m.as_str()).to_owned();
+ fn parse_req(req_as_str:&str)->Option<Request>{
+     if &req_as_str == &""{return None}
+     let mut path_with_params: String = Regex::new(r" /[\w|/]+").unwrap().find_iter(req_as_str).map(|x| x.as_str().trim().replace("&", "")).collect();
+     let method= Regex::new(r"(GET|POST|PUT|DELETE)").unwrap().captures(req_as_str).unwrap().get(1).map_or("",|m|m.as_str()).to_owned();
 
     let params: String = Regex::new(r"(\?|&|\r\n)\w+=\w+").unwrap().find_iter(req_as_str).map(|x| x.as_str().to_owned()).collect();
     if path_with_params==""{
@@ -269,5 +281,5 @@ pub fn serve(address:&str, router:& mut Router){
         req.add_param(splits[0], splits[1]);
 
     }
-    return req;
+    return Some(req);
 }

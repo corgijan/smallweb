@@ -7,15 +7,16 @@ It is dependent on following crates: regex, urlencoding and threadpool.
 
 ```rust
 fn main(){
-    serve("127.0.0.1:7000",
-          Router::new()
-              .get("/",|r:Request|_OK("Hello".to_string()))
-              .get("/saymyname", hello_params) // responds to /saymyname&name=jan
-              .get("/:name", hello_url_param) // responds to /<name> except /saymyname
-              //.validator(|r:Request| Some(r))
-              //.default(_OK("NOT FOUND".to_string()))
-              //.thradpool_size(16)
-    );
+let router = Router::new().get("/hello",|r:Request|_OK("Hello".to_string()))
+    .validator(|r:Request| Some(r))
+    .default(_OK("NOT FOUND".to_string()))
+    .get("/saymyname", hello_params) // responds to /saymyname&name=jan
+    .get("/:name", hello_url_param)
+    .get("/",|r:Request| _OK("<h1>HELLO from the BASE</h1>".to_string()))
+    .thradpool_size(4)
+    .okay();
+
+serve("127.0.0.1:7000",router);
 }
 
 fn hello_params(r:Request) -> HTTP_RESPONSE{
