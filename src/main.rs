@@ -16,11 +16,17 @@ async fn main(){
 }
 
 fn hello_params(r:Request) -> HTTP_RESPONSE{
-    _OK(format!("Hello {} </h1> by request param</p>", r.params.get("name").unwrap()))
+    return match r.params.get("name"){
+        Some(s) => _OK( format!("Hello {s} </h1> by request param</p>")),
+        _=> {_NOT_FOUND}
+    }
 }
 
 fn hello_url_param(r:Request) -> HTTP_RESPONSE {
-    _OK( format!("Hello {} by url", r.url_params.get("name").unwrap()))
+     return match r.url_params.get("name"){
+        Some(s) => _OK( format!("Hello {} by url", s)),
+        _=> {_NOT_FOUND}
+    }
 }
 
 

@@ -221,36 +221,40 @@ fn header_to_string(header: HashMap<String, String>) -> String {
 
 use async_std::task::spawn;
 use futures::stream::StreamExt;
+
 pub async fn serve(address: &str, router: &'static Router) {
     let listener = TcpListener::bind(address).await.unwrap();
 
-    listener
-        .incoming()
+    listener.incoming()
         .for_each_concurrent(/* limit */ None, |tcpstream| async move {
             //let router=router.clone();
-            let start = std::time::Instant::now();
+            //let start = std::time::Instant::now();
             let mut s = tcpstream.unwrap();
-
-            let mut buffer = [0; 1024 * 16];
-            let am = s.read(&mut buffer).await.unwrap();
-            let decoded = decode_binary(&buffer[..am]).to_owned();
-
-            let decoded = String::from_utf8_lossy(&decoded);
-            eprintln!("elapsed {:?} decode", start.elapsed().as_micros()); // note :?
-            let start2 = std::time::Instant::now();
-            match parse_req(&decoded) {
-                Some(req) => {
-                    let start3 = std::time::Instant::now();
-                    eprintln!("elapsed {:?} parse req", start2.elapsed().as_micros());
-                    route(req, Response::new(s), &router).await;
-                    eprintln!("elapsed {:?} sending", start3.elapsed().as_micros()); // note :?
-                }
-                _ => {
-                    Response::new(s).send(HTTP_RESPONSE::_NOT_FOUND).await;
-                }
-            }
+            spawn(handle_connection(s,router));
         })
         .await;
+}
+
+
+async fn handle_connection(mut tcpstream: TcpStream,router:&'static Router){
+    let mut buffer = [0; 1024 * 16];
+    let am = tcpstream.read(&mut buffer).await.unwrap();
+    let decoded = decode_binary(&buffer[..am]).to_owned();
+
+    let decoded = String::from_utf8_lossy(&decoded);
+    //eprintln!("elapsed {:?} decode", start.elapsed().as_micros()); // note :?
+    //let start2 = std::time::Instant::now();
+    match parse_req(&decoded) {
+        Some(req) => {
+            //let start3 = std::time::Instant::now();
+            //eprintln!("elapsed {:?} parse req", start2.elapsed().as_micros());
+            route(req, Response::new(tcpstream), router).await;
+            //eprintln!("elapsed {:?} sending", start3.elapsed().as_micros()); // note :?
+        }
+        _ => {
+            Response::new(tcpstream).send(HTTP_RESPONSE::_NOT_FOUND).await;
+        }
+    }
 }
 
 lazy_static! {
