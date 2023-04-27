@@ -1,27 +1,32 @@
+#![feature(lazy_cell)]
+
 use std::io::prelude::*;
 use std::net::TcpListener;
 use std::net::TcpStream;
 use std::str;
 use regex::Regex;
 use std::collections::HashMap;
-use crate::HTTP_RESPONSE::*;
+use crate::HttpResponse::*;
 use urlencoding::{decode_binary, encode};
 use threadpool::ThreadPool;
-use std::sync::mpsc::channel;
-
+use std::sync::LazyLock;
 
 type HTTPMETHOD =String;
 type Validator=fn(Request)->Option<Request>;
 
 #[derive(Debug)]
 #[derive(Clone)]
-pub enum HTTP_RESPONSE{
-    _OK(String),
-    _REDIRECT(String),
-    _UNAUTHORIZED,
-    _NOT_FOUND,
-    _OK_with_header(String, HashMap<String,String>)
+pub enum HttpResponse{
+    OK(String),
+    Redirect(String),
+    Unauthorized,
+    NotFound,
+    OKWithHeader(String, HashMap<String,String>)
 }
+
+static REGEX_PATH: LazyLock<Regex> = LazyLock::new(||Regex::new(r" /[\w|/]+").unwrap());
+static REGEX_VERB: LazyLock<Regex> = LazyLock::new(||Regex::new(r"(GET|POST|PUT|DELETE)").unwrap());
+static REGEX_PARAMS: LazyLock<Regex> = LazyLock::new(||Regex::new(r"(\?|&|\r\n)\w+=\w+").unwrap());
 
 /// Routes the Request  to a static or dynamic route
 /// # Arguments
@@ -44,7 +49,7 @@ pub fn route(mut request: Request, mut response: Response, router: &Router) {
                     match  router.matches_dyn_route(&request.path){
                         Some((route, params))=>{
                             request.set_url_params(params);
-                            let response_txt = router.paths.get(&(request.method.clone(), route.clone())).unwrap_or(&{ |_r: Request| _OK("404 DYN".to_string()) })(request);
+                            let response_txt = router.paths.get(&(request.method.clone(), route.clone())).unwrap_or(&{ |_r: Request| OK("404 DYN".to_string()) })(request);
                             response.send(response_txt);
                         },
                         _=>{
@@ -55,7 +60,7 @@ pub fn route(mut request: Request, mut response: Response, router: &Router) {
                 }
             }
         },
-        None=>response.send(HTTP_RESPONSE::_UNAUTHORIZED)
+        None=>response.send(HttpResponse::Unauthorized)
     }
 
 }
@@ -64,9 +69,9 @@ pub fn route(mut request: Request, mut response: Response, router: &Router) {
 /// represents a router with all paths and dynmaic paths
 #[derive(Clone)]
 pub struct Router{
-    pub paths: HashMap<(HTTPMETHOD,String),fn(Request)->HTTP_RESPONSE>,
+    pub paths: HashMap<(HTTPMETHOD,String),fn(Request)->HttpResponse>,
     pub dyn_paths:Vec<(String,Regex,Vec<String>)>,
-    default_response:  HTTP_RESPONSE,
+    default_response:  HttpResponse,
     validator:Validator,
     thradpool_size:u16,
 }
@@ -74,7 +79,7 @@ pub struct Router{
 impl Router{
     /// Returns a Router with an empty paths and dyn_paths directory
     pub fn new()->Router{
-        Router{paths:HashMap::new(),dyn_paths:Vec::new(), default_response: HTTP_RESPONSE::_NOT_FOUND, validator: |r:Request|Some(r), thradpool_size: 8 }
+        Router{paths:HashMap::new(),dyn_paths:Vec::new(), default_response: HttpResponse::NotFound, validator: |r:Request|Some(r), thradpool_size: 8 }
     }
     /// Registers a GET path for the given `path ` and returns the router for nicer instanciating
     ///
@@ -94,30 +99,30 @@ impl Router{
     /// }
     ///
     /// ```
-    pub fn get(mut self,path:&str,f:fn(Request)->HTTP_RESPONSE)->Router{
+    pub fn get(mut self,path:&str,f:fn(Request)->HttpResponse)->Router{
         self.add_route(path,f,"GET".to_string());
         self
     }
 
-    pub fn post(mut self,path:&str,f:fn(Request)->HTTP_RESPONSE)->Router{
+    pub fn post(mut self,path:&str,f:fn(Request)->HttpResponse)->Router{
         self.add_route(path,f,"POST".to_string());
         self
     }
 
-    pub fn put(mut self,path:&str,f:fn(Request)->HTTP_RESPONSE)->Router{
+    pub fn put(mut self,path:&str,f:fn(Request)->HttpResponse)->Router{
         self.add_route(path,f,"PUT".to_string());
         self
     }
 
-    pub fn delete(mut self,path:&str,f:fn(Request)->HTTP_RESPONSE)->Router{
+    pub fn delete(mut self,path:&str,f:fn(Request)->HttpResponse)->Router{
         self.add_route(path,f,"DELETE".to_string());
         self
     }
-    pub fn default(mut self,default_resp:HTTP_RESPONSE)->Router{
+    pub fn default(mut self,default_resp:HttpResponse)->Router{
         self.default_response=default_resp;
         self
     }
-    pub fn add_route(&mut self,path:&str,f:fn(Request)->HTTP_RESPONSE,method:HTTPMETHOD){
+    pub fn add_route(&mut self,path:&str,f:fn(Request)->HttpResponse,method:HTTPMETHOD){
         let params =Regex::new(r":\w+").unwrap().find_iter(path).map(|x| x.as_str().to_owned()).collect::<Vec<String>>();
         if params.len()>0{
             let mut regex_withparams = path.to_string();
@@ -201,14 +206,14 @@ impl Response {
      fn new(stream:TcpStream)-> Response {
         Response { response_text:"".to_string(), stream:stream,header:HashMap::new() }
     }
-    pub fn send(mut self,response:HTTP_RESPONSE){
+    pub fn send(mut self,response:HttpResponse){
         let msg= match response {
-            _OK(msg)=>{ format!("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n{}Content-Length:{}\r\n\r\n{}",header_to_string(self.header), msg.len(), &msg)},
-            _OK_with_header(msg, header)=>{
+            OK(msg)=>{ format!("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n{}Content-Length:{}\r\n\r\n{}",header_to_string(self.header), msg.len(), &msg)},
+            OKWithHeader(msg, header)=>{
                 dbg!(format!("HTTP/1.1 200 OK\r\n{}Content-Length:{}\r\n\r\n{}",header_to_string(header), msg.len(), &msg))}
-            _REDIRECT(location)=>{format!("HTTP/1.1 308 Permanent Redirect\r\nLocation:{}\r\n\r\n", location)},
-            _UNAUTHORIZED =>{format!("HTTP/1.1 401 Unauthorized\r\n\r\n")},
-            _NOT_FOUND=>{format!("HTTP/1.1 404 Not Found\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length:{}\r\n\r\n{}", "404 NOT FOUND".len(), "404 NOT FOUND")}
+            Redirect(location)=>{format!("HTTP/1.1 308 Permanent Redirect\r\nLocation:{}\r\n\r\n", location)},
+            Unauthorized =>{format!("HTTP/1.1 401 Unauthorized\r\n\r\n")},
+            NotFound=>{format!("HTTP/1.1 404 Not Found\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length:{}\r\n\r\n{}", "404 NOT FOUND".len(), "404 NOT FOUND")}
         };
 
         self.stream.write(msg.as_bytes()).unwrap();
@@ -243,7 +248,7 @@ pub fn serve(address:&str, router:&'static Router){
                 });
             }
             _=>{ pool.execute(move|| {
-              Response::new(stream).send(HTTP_RESPONSE::_NOT_FOUND)
+              Response::new(stream).send(HttpResponse::NotFound)
             });}
         }
 
@@ -253,10 +258,10 @@ pub fn serve(address:&str, router:&'static Router){
 
  fn parse_req(req_as_str:&str)->Option<Request>{
      if &req_as_str == &""{return None}
-     let mut path_with_params: String = Regex::new(r" /[\w|/]+").unwrap().find_iter(req_as_str).map(|x| x.as_str().trim().replace("&", "")).collect();
-     let method= Regex::new(r"(GET|POST|PUT|DELETE)").unwrap().captures(req_as_str).unwrap().get(1).map_or("",|m|m.as_str()).to_owned();
+     let mut path_with_params: String = REGEX_PATH.find_iter(req_as_str).map(|x| x.as_str().trim().replace("&", "")).collect();
+     let method= REGEX_VERB.captures(req_as_str).unwrap().get(1).map_or("",|m|m.as_str()).to_owned();
 
-    let params: String = Regex::new(r"(\?|&|\r\n)\w+=\w+").unwrap().find_iter(req_as_str).map(|x| x.as_str().to_owned()).collect();
+    let params: String = REGEX_PARAMS.find_iter(req_as_str).map(|x| x.as_str().to_owned()).collect();
     if path_with_params==""{
         path_with_params= "/".to_string()
     }
